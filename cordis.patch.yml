@@ -1,0 +1,25 @@
+# dsh-workspace-presets bundle patch
+#
+# This file is the `dsh.bundle.patch` layer of the published package: when the
+# plugin is installed through the official CLI —
+#
+#   dsh plugin --profile <name> add dsh-workspace-presets
+#
+# — the command reconciles `dsh.profile.bundles` against installed packages
+# and, seeing this declaration, appends the package to the bundle stack. The
+# profile boot then merges THIS patch (a single `insert` of the plugin row)
+# exactly like the manual mount line below. No profile file edits needed.
+#
+# Manual mount (alternative to the bundle channel) — append to the profile's
+# cordis.patch.yml:
+#
+#   - insert:
+#       - id: workspace-presets
+#         name: 'dsh-workspace-presets'
+#
+# Do not combine both channels for the same profile: two rows mount the
+# package twice, the settings namespace registers twice, and the second
+# registration fails loud at boot.
+- insert:
+    - id: workspace-presets
+      name: 'dsh-workspace-presets'

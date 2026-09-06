@@ -134,13 +134,13 @@ dsh plugin --profile web add dsh-workspace-presets
 ### Straight from GitHub, without cloning
 
 ```sh
-dsh plugin --profile web add github:YOUR_USERNAME/dsh-workspace-presets
+dsh plugin --profile web add github:GBDJXB/dsh-workspace-presets
 ```
 
 ### From a local checkout (clone first)
 
 ```powershell
-git clone https://github.com/YOUR_USERNAME/dsh-workspace-presets.git
+git clone https://github.com/GBDJXB/dsh-workspace-presets.git
 cd dsh-workspace-presets
 npm install          # ← required for local installs: see the note below
 dsh plugin --profile web add .\dsh-workspace-presets   # or: dsh plugin --profile web add .

@@ -4,7 +4,7 @@
 
 <div align="center">
   <a href="https://opensource.org/licenses/MIT"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-yellow.svg" /></a>
-  <img alt="支持的 DSH 版本:0.1.1-rc.2" src="https://img.shields.io/badge/DSH-0.1.1--rc.2-4d6bfe" />
+  <img alt="支持的 DSH 版本:0.1.5-rc.1" src="https://img.shields.io/badge/DSH-0.1.5--rc.1-4d6bfe" />
   <img alt="工作区预设" src="https://img.shields.io/badge/-工作区预设-4d6bfe" /> <img alt="自动套用" src="https://img.shields.io/badge/-自动套用-4d6bfe" /> <img alt="中英双语" src="https://img.shields.io/badge/-中英双语-4d6bfe" />
   <!-- 发布到 npm 后可补充:npm 版本 / 下载量 / GitHub stars 徽章。 -->
 </div>
@@ -23,7 +23,7 @@
 
 ## 功能一览
 
-- 在 DSH 设置面板新增原生 **「工作区预设」** 页:每个工作区一行、各带一个预设选择器(系统 / 用户预设均列出,损坏预设会被标记)。
+- 在 DSH 设置面板新增原生 **「工作区预设」** 页:每个工作区一行、各带一个预设选择器(系统 / 用户预设均列出,损坏预设会被标记)。页面自带标题与说明——0.1.5 的设置面板只提供导航与内容列,不再替每个页面渲染标题。
 - **自动套用绑定**:只要某个空白会话属于已绑定的工作区就生效——包括侧边栏为每个工作区保留的隐藏可复用空白会话,所有打开的标签页一致生效。
 - 干净回退:未绑定的工作区保持 DSH 默认行为(全局默认 + hero 屏芯片);在空白会话上手动用芯片选的预设永远优先于绑定。
 - 已开始的会话、子代理会话或已归档会话不受影响。
@@ -32,7 +32,7 @@
 
 **前置条件**:DSH 部署包含 Agent 预设(标准安装即有),且 PATH 里有 `pnpm`(`dsh plugin` 内部转发给 pnpm)。
 
-**支持的 DSH 版本**:`0.1.1-rc.2`(peer 范围)。
+**支持的 DSH 版本**:`0.1.5-rc.1`(peer 范围;其内部 client 包为 `0.1.5-rc.2`)。
 
 **从 npm 安装**(发布后):
 
@@ -43,13 +43,13 @@ dsh plugin --profile web add dsh-workspace-presets
 **直接从 GitHub 安装(无需克隆):**
 
 ```sh
-dsh plugin --profile web add github:YOUR_USERNAME/dsh-workspace-presets
+dsh plugin --profile web add github:GBDJXB/dsh-workspace-presets
 ```
 
 **从本地克隆安装:**
 
 ```powershell
-git clone https://github.com/YOUR_USERNAME/dsh-workspace-presets.git
+git clone https://github.com/GBDJXB/dsh-workspace-presets.git
 cd dsh-workspace-presets
 npm install          # ← 本地安装必须先做这步,见下方说明
 dsh plugin --profile web add .\dsh-workspace-presets   # 或:dsh plugin --profile web add .
@@ -57,7 +57,7 @@ dsh plugin --profile web add .\dsh-workspace-presets   # 或:dsh plugin --profil
 
 > 本地文件夹安装是 `link:` 安装:Node 会从仓库的真实路径解析模块,因此插件自己的运行时依赖(`@deepseek-ai/schemastery`)必须先装进仓库目录(`npm install` / `pnpm install`),否则 profile 无法启动。npm / git 安装不需要这步。
 
-三种方式殊途同归:pnpm 把包装进 profile,`dsh` 看到包里的 `dsh.bundle.patch` 会自动调和 `dsh.profile.bundles`,**无需手改任何 profile 文件**。完成后**重启 profile**(`dsh web`)并**硬刷新浏览器**(Ctrl+Shift+R),打开 **设置 → 工作区预设** 即可看到新页面。
+三种方式殊途同归:pnpm 把包装进 profile,`dsh` 看到包里的 `dsh.bundle.patch` 会自动调和 `dsh.profile.bundles`,**无需手改任何 profile 文件**。完成后**重启 profile**(`dsh web`)并**硬刷新浏览器**(Ctrl+Shift+R),打开侧边栏底部的 **设置 → 工作区预设** 即可看到新页面。
 
 **或者让 LLM 帮你装**——把下面这段提示词发给任意一个 DSH 会话(或你惯用的 agent):
 
@@ -82,6 +82,7 @@ dsh plugin --profile web add .\dsh-workspace-presets   # 或:dsh plugin --profil
 | `dsh plugin` 提示找不到 pnpm | 先 `npm i -g pnpm` 再重跑。 |
 | 启动报 `ERR_MODULE_NOT_FOUND … imported from …\host.js` | 本地文件夹安装但没在仓库里装依赖:在仓库目录执行 `npm install`(或 `pnpm install`)后重启。npm / git 安装不会遇到此问题。 |
 | 装完设置页没出现 | Host 半部分要重启 profile 才激活——重启 `dsh web` 后硬刷新浏览器。 |
+| 页面出现「读取失败:…」或整页空白 | 该提示只在 Host 半部分未加载、或旧版 client 与新宿主不匹配时出现。用 `dsh plugin --profile web add dsh-workspace-presets@latest` 升级到与本 DSH 同版本线的插件,再重启 + 硬刷新。 |
 | 已绑定工作区的新会话仍用全局默认预设 | 绑定只作用于**空白**会话,hero 屏手动选择永远优先,子代理会话不受影响;已开始的会话按设计不切换。 |
 | 插件被挂载两次 / 启动时命名空间注册报错 | 你把 bundle 通道与手动 `cordis.patch.yml` 插入行同时用上了——二选一。 |
 
@@ -100,7 +101,7 @@ dsh plugin --profile web add dsh-workspace-presets@latest
 
 ## 使用
 
-1. 打开 **设置 → 工作区预设**。
+1. 打开侧边栏底部的 **设置**,进入 **工作区预设**。
 2. 给每个工作区选一个预设(或保持「跟随全局默认」)。
 3. 在该工作区新建会话——自动以绑定预设启动,右下角 toast 确认每次自动套用。
 
@@ -129,6 +130,7 @@ dsh plugin --profile web remove dsh-workspace-presets
 
 - **非侵入**:UI 只占两个新 id 的附加槽位(`settings.section` 的 `workspace-presets`、`shell.overlay` 的 `workspace-presets.overlay`),不补丁、不替换任何官方 UI。
 - **只用官方 API**:设置命名空间 + `settings.describe/update/replace`、`agentPresets.list/select`、`slots`/`locale`/`connection`/`remote`/`timer` 服务、`sessions`/`workspaces` 列表 store。
+- **0.1.5 Remote 约定**:所有调用走 `ctx.remote.<命名空间>.<方法>(位置参数)`,返回 `RemoteResult`(`{ok:true,value}` / `{ok:false,error}`);已移除的 `ctx.connection.api` 与 `{result:{ok,value}}` 信封不再使用。每个 Remote 命名空间是**独立的 cordis 服务**(键为 `remote.<命名空间>`),所以插件 `inject` 里必须声明 `remote.agentPresets` 与 `remote.settings`——未声明时上下文代理会直接抛 `cannot get property "remote.agentPresets" without inject`。会话自身的预设读 `session.projectionValues.agentPreset`(会话列表摘要里已没有该字段)。
 - **不写文件**:绑定存在 DSH 自己的设置文档里;插件从不创建或删除预设目录、会话日志或私有存储。
 - **多标签安全**:套用操作幂等且由宿主按会话串行;设置写入带 revision 防冲突。
 
@@ -162,10 +164,14 @@ dsh-workspace-presets/
       "platform": "web",
       "inject": [
         "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-api-workspace-controller",
         "@deepseek-ai/dsh-client-connection",
         "@deepseek-ai/dsh-client-locale",
-        "@deepseek-ai/dsh-client-runtime",
-        "@deepseek-ai/dsh-client-ui-settings"
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-session",
+        "@deepseek-ai/dsh-client-ui-workspace"
       ]
     }
   },
@@ -173,11 +179,13 @@ dsh-workspace-presets/
 }
 ```
 
-(`dsh.client.inject` 与官方 `ui-agent-preset` 客户端包一致;如面向其他 DSH 版本请对应调整。)
+(`dsh.client.inject` 与 0.1.5 官方 `ui-workspace` / `ui-agent-preset` 客户端包保持一致;换 DSH 版本时按该版本实际发布的 `@deepseek-ai/*` client 包名同步。该字段是加载/预取元数据,不是 Cordis 服务注入——浏览器侧的模块表基线自带 `react`、`@deepseek-ai/dsh-client-ui-slots`、`@deepseek-ai/dsh-client-ui-primitives` 等,无需声明。)
 
 ## 开发
 
 纯 JavaScript(ESM),零构建、零打包器、零 JSX——仓库即发布包。`client.js` 是手写的 `window.__ModuleLoader__.load(...)` 模块,用 `React.createElement` 渲染;Host 侧唯一导入是 `@deepseek-ai/schemastery`(与 DSH 自身 `settings` 服务校验 schema 用的是同一个 fork)。
+
+改 `client.js` 后 0.1.5 的 client HMR 会按文件 mtime 轮询并热重载该 bundle(必要时再硬刷新一次);改 `host.js` 或 `package.json` 需要重启 profile。
 
 ## License
 

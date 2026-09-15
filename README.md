@@ -4,7 +4,7 @@
 
 <div align="center">
   <a href="https://opensource.org/licenses/MIT"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-yellow.svg" /></a>
-  <img alt="Supported DSH versions: 0.1.1-rc.2" src="https://img.shields.io/badge/DSH-0.1.1--rc.2-4d6bfe" />
+  <img alt="Supported DSH versions: 0.1.5-rc.1" src="https://img.shields.io/badge/DSH-0.1.5--rc.1-4d6bfe" />
   <img alt="Workspace presets" src="https://img.shields.io/badge/-Workspace%20presets-4d6bfe" /> <img alt="Auto apply" src="https://img.shields.io/badge/-Auto%20apply-4d6bfe" /> <img alt="zh%20%2F%20en" src="https://img.shields.io/badge/-zh%20%2F%20en-4d6bfe" />
   <!-- After publishing, add: npm version / npm downloads / GitHub stars badges. -->
 </div>
@@ -23,7 +23,7 @@
 
 ## What it does
 
-- Adds a native **"Workspace presets"** page to the DSH settings panel: one row per workspace, each with a preset picker (system / user presets, broken presets flagged).
+- Adds a native **"Workspace presets"** page to the DSH settings panel: one row per workspace, each with a preset picker (system / user presets, broken presets flagged). The page draws its own heading and intro — the 0.1.5 settings panel only supplies the nav and content columns, and no longer renders a per-section title.
 - **Applies the binding automatically** whenever a *blank* session belongs to a bound workspace — including the hidden reusable blank session the sidebar keeps per workspace, in every open tab.
 - Falls back cleanly: a workspace without a binding keeps DSH's normal behavior (global default, hero-screen chip). An explicit chip choice on a blank session always wins over the binding.
 - Sessions that have started, subagent sessions, or archived sessions will not be touched.
@@ -32,7 +32,7 @@
 
 **Prerequisites:** a DSH deployment that composes Agent presets (the standard install does), and `pnpm` on your PATH (`dsh plugin` forwards to pnpm).
 
-**Supported DSH versions:** `0.1.1-rc.2` (peer range).
+**Supported DSH versions:** `0.1.5-rc.1` (peer range; its bundled client packages are `0.1.5-rc.2`).
 
 **From npm** (once published):
 
@@ -43,13 +43,13 @@ dsh plugin --profile web add dsh-workspace-presets
 **Straight from GitHub, without cloning:**
 
 ```sh
-dsh plugin --profile web add github:YOUR_USERNAME/dsh-workspace-presets
+dsh plugin --profile web add github:GBDJXB/dsh-workspace-presets
 ```
 
 **From a local checkout** (clone first):
 
 ```powershell
-git clone https://github.com/YOUR_USERNAME/dsh-workspace-presets.git
+git clone https://github.com/GBDJXB/dsh-workspace-presets.git
 cd dsh-workspace-presets
 npm install          # ← required for local installs: see the note below
 dsh plugin --profile web add .\dsh-workspace-presets   # or: dsh plugin --profile web add .
@@ -57,7 +57,7 @@ dsh plugin --profile web add .\dsh-workspace-presets   # or: dsh plugin --profil
 
 > Local-folder installs are `link:` installs: Node resolves the package's modules from the repo's real path, so the plugin's own runtime dependency (`@deepseek-ai/schemastery`) must be installed inside the repo (`npm install` / `pnpm install`) before the profile boots. Registry and git installs do not need this step.
 
-All three forms do the same thing: pnpm installs the package into the profile and `dsh` reconciles `dsh.profile.bundles` automatically (the package declares `dsh.bundle.patch`), so no profile file edits are needed. Then **restart the profile** (`dsh web`) and **hard-refresh the browser** (Ctrl+Shift+R). Open **Settings → Workspace presets** — the page should be there.
+All three forms do the same thing: pnpm installs the package into the profile and `dsh` reconciles `dsh.profile.bundles` automatically (the package declares `dsh.bundle.patch`), so no profile file edits are needed. Then **restart the profile** (`dsh web`) and **hard-refresh the browser** (Ctrl+Shift+R). Open **Settings** from the sidebar footer and pick **Workspace presets** — the page should be there.
 
 **Or let an LLM install it for you** — paste this prompt into any DSH session (or your favorite agent):
 
@@ -84,6 +84,7 @@ If anything fails, check the Troubleshooting table in the README before retrying
 | `dsh plugin` says pnpm is not found | Install pnpm (`npm i -g pnpm`) and re-run. |
 | Boot fails with `ERR_MODULE_NOT_FOUND … imported from …\host.js` | Local-folder install without the plugin's own deps: run `npm install` (or `pnpm install`) inside the repo, then restart. Registry/git installs never hit this. |
 | Settings page doesn't show after install | The Host half activates on a profile restart — restart `dsh web`, then hard-refresh the browser. |
+| The page shows "Could not load: …" or stays blank | That is the old client half talking to a newer DSH (or a Host half that never loaded). Upgrade with `dsh plugin --profile web add dsh-workspace-presets@latest` so the plugin matches your DSH version line, then restart + hard-refresh. |
 | A bound workspace's new session still starts with the default preset | The binding only applies to **blank** sessions, and a manual hero-chip choice always wins; subagent sessions are never touched. Already-started sessions are fixed by design. |
 | Plugin mounts twice / namespace registration fails at boot | You combined the bundle channel with a manual `cordis.patch.yml` insert — keep only one. |
 
@@ -102,7 +103,7 @@ or bump the version in `$DSH_HOME/profiles/web/package.json` and re-run `pnpm in
 
 ## Usage
 
-1. Open **Settings → Workspace presets**.
+1. Open **Settings** from the sidebar footer, then **Workspace presets**.
 2. Pick a preset for each workspace (or leave *Follow global default*).
 3. Start a new session in that workspace — it boots with the bound preset; a small toast confirms each automatic apply.
 
@@ -131,6 +132,7 @@ then restart the profile. To **disable temporarily** instead, append to the prof
 
 - **Non-invasive.** UI lives only in two additive slots with fresh ids (`settings.section` entry `workspace-presets`, `shell.overlay` entry `workspace-presets.overlay`); no shipped UI is patched or replaced.
 - **Official APIs only.** Settings namespace + `settings.describe/update/replace`, `agentPresets.list/select`, the `slots`/`locale`/`connection`/`remote`/`timer` services, and the `sessions`/`workspaces` list stores.
+- **0.1.5 Remote contract.** Every call goes through `ctx.remote.<namespace>.<method>(positional args)` and answers with the `RemoteResult` branch (`{ok:true,value}` / `{ok:false,error}`); the removed `ctx.connection.api` object envelope (`{result:{ok,value}}`) is not used. Each Remote namespace is its own cordis service (`remote.<namespace>`), so `remote.agentPresets` and `remote.settings` are declared in the plugin's `inject` list — an undeclared `ctx.remote.<ns>` is refused with `cannot get property "remote.agentPresets" without inject`. A session's own preset is read from `session.projectionValues.agentPreset` (the session list summary no longer carries that field).
 - **No files written.** Bindings persist in DSH's own settings document; the plugin never creates or deletes preset directories, session logs, or its own storage.
 - **Multi-tab safe.** Selects are idempotent and Host-serialized per session; settings writes are revision-guarded.
 
@@ -164,10 +166,14 @@ No build step, no `lib/`, no generated files — the repository **is** the shipp
       "platform": "web",
       "inject": [
         "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-api-workspace-controller",
         "@deepseek-ai/dsh-client-connection",
         "@deepseek-ai/dsh-client-locale",
-        "@deepseek-ai/dsh-client-runtime",
-        "@deepseek-ai/dsh-client-ui-settings"
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-session",
+        "@deepseek-ai/dsh-client-ui-workspace"
       ]
     }
   },
@@ -175,11 +181,13 @@ No build step, no `lib/`, no generated files — the repository **is** the shipp
 }
 ```
 
-(`dsh.client.inject` mirrors the shipped `ui-agent-preset` client package; adjust to the exact DSH version you target.)
+(`dsh.client.inject` mirrors the 0.1.5 shipped `ui-workspace` / `ui-agent-preset` client packages; when you target another DSH version, sync it with the `@deepseek-ai/*` client packages that version actually publishes. The field is loading/prefetch metadata, not Cordis service injection — the browser module-table baseline already carries `react`, `@deepseek-ai/dsh-client-ui-slots`, `@deepseek-ai/dsh-client-ui-primitives`, and friends, so they need no declaration.)
 
 ## Development
 
 Plain JavaScript (ESM), no build step, no bundler, no JSX — the repo is the shipped package. `client.js` is a hand-written `window.__ModuleLoader__.load(...)` module using `React.createElement`; the only Host import is `@deepseek-ai/schemastery`, the same fork DSH's own `settings` service validates schemas against.
+
+Editing `client.js` is picked up by the 0.1.5 client HMR watcher (it polls bundle mtimes and reloads that bundle; hard-refresh if in doubt). Editing `host.js` or `package.json` needs a profile restart.
 
 ## License
 

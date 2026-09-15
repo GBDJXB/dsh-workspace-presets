@@ -15,11 +15,19 @@
  *      (agentPresets.select). It never touches started sessions, subagent
  *      sessions, or sessions whose preset was chosen explicitly.
  *
- * Visuals follow the shipped settings UI: rows are 16px-padded flex rows on
- * --dsw-alias-border-l2, and the picker is the settings-native select recipe
- * the shipped settings pages use for their own native selects (32px height,
- * 8px radius, 1px --dsw-alias-border-l2 on --dsw-alias-bg-layer-1, tertiary
- * 12×12 chevron), so light/dark themes keep working through the DSH tokens.
+ * DSH 0.1.5 wire contract: every Remote call goes through `ctx.remote` with
+ * positional arguments and answers with the RemoteResult branch
+ * (`{ok:true, value}` / `{ok:false, error}`) — the older `ctx.connection.api`
+ * object envelope (`{result: {ok, value}}`, arguments as one object) is gone.
+ * A session's preset now rides the `agentPreset` session projection instead of
+ * a field on the session list summary.
+ *
+ * Visuals follow the shipped 0.1.5 settings UI: the panel shell paints no
+ * section title, so the section renders its own <h2> heading and intro; rows
+ * are 16px-padded flex rows on --dsw-alias-border-l2; the picker follows the
+ * settings-native input recipe (34px height, 8px radius, .5px
+ * --dsw-alias-border-l4 on --dsw-alias-bg-layer-3, tertiary 12×12 chevron), so
+ * light/dark themes keep working through the DSH tokens.
  */
 window.__ModuleLoader__.load({
   id: 'dsh-workspace-presets',
@@ -29,6 +37,15 @@ window.__ModuleLoader__.load({
 
     const SETTINGS_NS = 'workspace-agent-presets'
     const LOCALE_NS = 'workspacePresets'
+    // Style-tag identity: the 0.1.5 client module system claims <style> tags a
+    // factory injected by their data-plugin/data-plugin-css marks, so tag ours.
+    const PLUGIN_ID = 'dsh-workspace-presets'
+    const STYLE_TAG_ID = 'dsh-workspace-presets/settings.css'
+    // Bounded first-read retry: the settings transport can answer late (the
+    // gateway connects after plugin apply), so a failed describe is retried a
+    // few times before the page settles on the error state.
+    const META_RETRY_LIMIT = 3
+    const META_RETRY_DELAY_MS = 2000
 
     const en = {
       nav: 'Workspace presets',
@@ -98,23 +115,31 @@ window.__ModuleLoader__.load({
       return snapshot
     }
 
-    /** Fold the RPC envelope shapes into one result. */
+    /**
+     * Fold one Remote answer into {ok, value} / {ok, code, error}.
+     *
+     * Since DSH 0.1.5 a generated Remote method resolves to the RemoteResult
+     * branch itself (`{ok:true, value}` / `{ok:false, error}`); only assembly
+     * faults (an unmounted method, a missing Codec) still throw. `code` is kept
+     * so callers can tell a missing endpoint from a business refusal.
+     */
     async function call(operation) {
       try {
-        const response = await operation()
-        if (response && response.result && response.result.ok) {
-          return { ok: true, value: response.result.value }
-        }
+        const result = await operation()
+        if (result && result.ok === true) return { ok: true, value: result.value }
+        const error = result && result.error
         return {
           ok: false,
-          error: response && response.result && response.result.error
-            ? response.result.error.message
-            : 'unknown error',
+          code: error && error.code,
+          error: error && error.message ? error.message : 'unknown error',
         }
       } catch (error) {
         return { ok: false, error: error instanceof Error ? error.message : String(error) }
       }
     }
+
+    /** The gateway code for "this deployment exports no such Remote method". */
+    const INVOCATION_UNAVAILABLE = 'gateway/invocation-unavailable'
 
     const META_INITIAL = {
       status: 'loading', // loading | ready | error | unavailable
@@ -127,11 +152,12 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * Scoped class names. Geometry mirrors the shipped agent-preset settings
-     * UI; every color rides DSH theme tokens with a neutral fallback.
+     * Scoped class names. Geometry mirrors the shipped settings sections;
+     * every color rides DSH theme tokens with a neutral fallback.
      */
     const C = {
       box: 'wpres-box',
+      heading: 'wpres-heading',
       description: 'wpres-description',
       row: 'wpres-row',
       rowMain: 'wpres-rowMain',
@@ -148,17 +174,19 @@ window.__ModuleLoader__.load({
 
     const stylesheet = `
 .wpres-box{max-width:720px;color:var(--dsw-alias-label-primary);display:flex;flex-direction:column;gap:12px}
+.wpres-heading{margin:0;font-size:18px;font-weight:600}
 .wpres-description{color:var(--dsw-alias-label-tertiary);font-size:13px;line-height:1.6;margin:0}
-.wpres-row{border-bottom:1px solid var(--dsw-alias-border-l2);align-items:center;gap:8px;padding:16px 0;display:flex}
-.wpres-rowMain{flex-direction:column;flex:1;gap:4px;min-width:0;display:flex}
+.wpres-row{border-bottom:.5px solid var(--dsw-alias-border-l2);align-items:center;gap:8px;padding:16px 0;display:flex}
+.wpres-rowMain{flex-direction:column;flex:1;gap:4px;min-width:0;padding-right:24px;display:flex}
 .wpres-title{color:var(--dsw-alias-label-primary);font-size:14px;font-weight:400;line-height:22px}
 .wpres-sub{color:var(--dsw-alias-label-tertiary);font-size:12px;font-weight:400;line-height:18px;overflow-wrap:anywhere}
 .wpres-selectWrap{position:relative;display:inline-flex;flex:none}
-.wpres-select{appearance:none;-webkit-appearance:none;background:var(--dsw-alias-bg-layer-1);height:32px;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:0 32px 0 10px;font:inherit;font-size:14px;line-height:22px;color:var(--dsw-alias-label-primary);cursor:pointer;max-width:320px;outline:none}
-.wpres-select:disabled{cursor:default;color:var(--dsw-alias-label-quaternary)}
-.wpres-select:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}
-.wpres-chevron{position:absolute;right:12px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--dsw-alias-label-tertiary);display:inline-flex}
-.wpres-button{margin-top:4px;align-self:flex-start;background:transparent;border:1px solid var(--dsw-alias-border-l2);border-radius:12px;padding:8px 14px;font:inherit;font-size:13px;color:var(--dsw-alias-label-primary);cursor:pointer}
+.wpres-select{appearance:none;-webkit-appearance:none;box-sizing:border-box;background:var(--dsw-alias-bg-layer-3);height:34px;border:.5px solid var(--dsw-alias-border-l4);border-radius:8px;padding:0 30px 0 12px;font:inherit;font-size:13px;line-height:1.5;color:var(--dsw-alias-label-primary);cursor:pointer;max-width:320px;outline:none}
+.wpres-select:hover:not(:disabled){border-color:var(--dsw-alias-label-dimmed)}
+.wpres-select:focus-visible{border-color:var(--dsw-alias-brand-primary);outline:none}
+.wpres-select:disabled{cursor:default;color:var(--dsw-alias-label-tertiary)}
+.wpres-chevron{position:absolute;right:10px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--dsw-alias-label-tertiary);display:inline-flex}
+.wpres-button{margin-top:4px;align-self:flex-start;background:transparent;border:.5px solid var(--dsw-alias-border-l2);border-radius:18px;padding:7px 14px;font:inherit;font-size:13px;color:var(--dsw-alias-label-primary);cursor:pointer}
 .wpres-button:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}
 .wpres-button:disabled{opacity:.5;cursor:default}
 .wpres-notice{color:var(--dsw-alias-state-success-primary);font-size:13px}
@@ -184,26 +212,73 @@ window.__ModuleLoader__.load({
       )
     }
 
+    /**
+     * Section frame shared by every page state. Module scope on purpose: a
+     * component defined inside the page would get a fresh identity each render
+     * and remount its subtree (dropping focus and pulse state).
+     */
+    function PageShell(props) {
+      return createElement(
+        'div',
+        { className: C.box },
+        createElement('h2', { className: C.heading }, props.title),
+        props.children,
+      )
+    }
+
+    /** Read one session's own Agent preset off the `agentPreset` projection. */
+    function presetOf(session) {
+      const value = session && session.projectionValues ? session.projectionValues.agentPreset : undefined
+      return typeof value === 'string' ? value : undefined
+    }
+
     function defineClient(ctx) {
-      const { api } = ctx.connection
       ctx.effect(() => ctx.locale.register(LOCALE_NS, { zh, en }), 'dsh-workspace-presets: locale dictionaries')
       const t = ctx.locale.bind(LOCALE_NS)
 
       const styleEl = document.createElement('style')
+      styleEl.setAttribute('data-plugin', PLUGIN_ID)
+      styleEl.setAttribute('data-plugin-css', STYLE_TAG_ID)
       styleEl.textContent = stylesheet
       document.head.appendChild(styleEl)
       ctx.effect(() => () => { styleEl.remove() }, 'dsh-workspace-presets: scoped stylesheet')
 
       const meta = createStore(META_INITIAL)
       const inFlight = new Set()
+      let metaFailures = 0
+      let metaRetry = null
+
+      function scheduleMetaRetry() {
+        if (metaRetry !== null || metaFailures >= META_RETRY_LIMIT) return
+        metaRetry = ctx.timer.timeout(() => {
+          metaRetry = null
+          void refreshMeta()
+        }, META_RETRY_DELAY_MS)
+      }
 
       async function refreshMeta() {
-        const roster = await call(() => api.agentPresets.list({}))
-        const described = await call(() => api.settings.describe({}))
+        const roster = await call(() => ctx.remote.agentPresets.list())
+        const described = await call(() => ctx.remote.settings.describe())
         if (!roster.ok || !described.ok) {
+          if (!roster.ok && roster.code === INVOCATION_UNAVAILABLE) {
+            // The deployment composes no agent presets at all: a valid state,
+            // not a failure — the page renders its "no presets" notice.
+            metaFailures = 0
+            meta.set({
+              ...meta.getSnapshot(),
+              status: 'ready',
+              error: null,
+              presets: [],
+              defaultPresetId: undefined,
+            })
+            return
+          }
+          metaFailures += 1
           meta.set({ ...meta.getSnapshot(), status: 'error', error: roster.ok ? described.error : roster.error })
+          scheduleMetaRetry()
           return
         }
+        metaFailures = 0
         const presets = Array.isArray(roster.value.presets) ? roster.value.presets : []
         const defaultPreset = presets.find((preset) => preset.isDefault === true)
         const namespace = (described.value.namespaces ?? []).find((entry) => entry.ns === SETTINGS_NS)
@@ -224,11 +299,11 @@ window.__ModuleLoader__.load({
 
       async function writeBindings(nextBindings, attempt) {
         const before = meta.getSnapshot()
-        const wrote = await call(() => api.settings.update({
-          ns: SETTINGS_NS,
-          patch: { bindings: nextBindings },
-          ...(typeof before.revision === 'number' ? { expectedRevision: before.revision } : {}),
-        }))
+        const wrote = await call(() => ctx.remote.settings.update(
+          SETTINGS_NS,
+          { bindings: nextBindings },
+          typeof before.revision === 'number' ? before.revision : undefined,
+        ))
         if (wrote.ok) {
           await refreshMeta()
           return { ok: true }
@@ -244,10 +319,25 @@ window.__ModuleLoader__.load({
         return { ok: false, error: wrote.error }
       }
 
-      async function clearAllBindings() {
-        const cleared = await call(() => api.settings.replace({ ns: SETTINGS_NS, section: {} }))
-        if (cleared.ok) await refreshMeta()
-        return cleared
+      async function clearAllBindings(attempt) {
+        const before = meta.getSnapshot()
+        const cleared = await call(() => ctx.remote.settings.replace(
+          SETTINGS_NS,
+          {},
+          typeof before.revision === 'number' ? before.revision : undefined,
+        ))
+        if (cleared.ok) {
+          await refreshMeta()
+          return { ok: true }
+        }
+        if (attempt === 0) {
+          await refreshMeta()
+          const after = meta.getSnapshot()
+          if (typeof after.revision === 'number' && after.revision !== before.revision) {
+            return clearAllBindings(1)
+          }
+        }
+        return { ok: false, error: cleared.error }
       }
 
       ctx.effect(() => {
@@ -268,10 +358,22 @@ window.__ModuleLoader__.load({
           const [notice, setNotice] = useState(null)
           const [errorText, setErrorText] = useState(null)
 
-          if (snapshot.status === 'loading') return createElement('div', { className: C.box }, t('loading'))
-          if (snapshot.status === 'error') return createElement('div', { className: C.box }, fmt(t('loadError'), { error: snapshot.error }))
-          if (snapshot.status === 'unavailable') return createElement('div', { className: C.box }, t('unavailable'))
-          if (snapshot.presets.length === 0) return createElement('div', { className: C.box }, t('rosterEmpty'))
+          // The 0.1.5 settings shell paints no section title, so every section
+          // renders its own heading; the states below share that frame.
+          const shell = (child) => createElement(PageShell, { title: t('nav') }, child)
+
+          if (snapshot.status === 'loading') {
+            return shell(createElement('p', { className: C.description }, t('loading')))
+          }
+          if (snapshot.status === 'error') {
+            return shell(createElement('div', { className: C.error }, fmt(t('loadError'), { error: snapshot.error })))
+          }
+          if (snapshot.status === 'unavailable') {
+            return shell(createElement('p', { className: C.description }, t('unavailable')))
+          }
+          if (snapshot.presets.length === 0) {
+            return shell(createElement('p', { className: C.description }, t('rosterEmpty')))
+          }
 
           const items = workspaces && Array.isArray(workspaces.items) ? workspaces.items : []
           const selectable = snapshot.presets.filter((preset) => preset.broken === undefined)
@@ -293,7 +395,7 @@ window.__ModuleLoader__.load({
             setSaving(true)
             setErrorText(null)
             setNotice(null)
-            const cleared = await clearAllBindings()
+            const cleared = await clearAllBindings(0)
             setSaving(false)
             if (cleared.ok) setNotice(t('cleared'))
             else setErrorText(fmt(t('saveError'), { error: cleared.error }))
@@ -349,10 +451,10 @@ window.__ModuleLoader__.load({
           })
 
           return createElement(
-            'div',
-            { className: C.box },
-            createElement('div', { className: C.description }, t('description')),
-            rows.length === 0 ? createElement('div', { className: C.description }, t('empty')) : rows,
+            PageShell,
+            { title: t('nav') },
+            createElement('p', { className: C.description }, t('description')),
+            rows.length === 0 ? createElement('p', { className: C.description }, t('empty')) : rows,
             notice !== null ? createElement('div', { className: C.notice }, notice) : null,
             errorText !== null ? createElement('div', { className: C.error }, errorText) : null,
             createElement(
@@ -395,20 +497,21 @@ window.__ModuleLoader__.load({
                 if (session === undefined || session.blank !== true) continue
                 // Subagents join their parent's composition; never re-link them.
                 if (session.origin === 'subagent' || session.parentId !== undefined) continue
-                if (session.agentPreset === binding) continue
+                const current = presetOf(session)
+                if (current === binding) continue
                 const runsDefault = snapshot.defaultPresetId === undefined
-                  || session.agentPreset === undefined
-                  || session.agentPreset === snapshot.defaultPresetId
-                const runsStaleBinding = session.agentPreset !== undefined && bindingValues.has(session.agentPreset)
+                  || current === undefined
+                  || current === snapshot.defaultPresetId
+                const runsStaleBinding = current !== undefined && bindingValues.has(current)
                 if (!runsDefault && !runsStaleBinding) continue
                 if (inFlight.has(sessionId)) continue
                 inFlight.add(sessionId)
-                void call(() => api.agentPresets.select({ sessionId, agentPreset: binding }))
+                void call(() => ctx.remote.agentPresets.select(sessionId, binding))
                   .then((selected) => {
                     if (selected.ok) {
-                      const preset = snapshot.presets.find((entry) => entry.id === selected.value.agentPreset)
+                      const preset = snapshot.presets.find((entry) => entry.id === selected.value)
                       setToast(fmt(t('toastApplied'), {
-                        preset: preset ? (preset.name ?? preset.id) : selected.value.agentPreset,
+                        preset: preset ? (preset.name ?? preset.id) : selected.value,
                         workspace: workspace.title,
                       }))
                     }
@@ -454,7 +557,14 @@ window.__ModuleLoader__.load({
 
     return {
       name: 'dsh-workspace-presets',
-      inject: ['slots', 'locale', 'connection', 'remote', 'timer'],
+      // Every Remote namespace is its OWN cordis service, keyed `remote.<ns>`
+      // (dsh-api-gateway's remoteServiceKey), so the context proxy only resolves
+      // `ctx.remote.agentPresets` / `ctx.remote.settings` once they are declared
+      // here — otherwise it throws `cannot get property "remote.agentPresets"
+      // without inject`. Declaring them also parks this plugin until both
+      // namespaces exist, which is the same contract the shipped ui-agent-preset
+      // client relies on.
+      inject: ['slots', 'locale', 'connection', 'remote', 'remote.agentPresets', 'remote.settings', 'timer'],
       apply: defineClient,
     }
   },

@@ -46,6 +46,12 @@ window.__ModuleLoader__.load({
     // few times before the page settles on the error state.
     const META_RETRY_LIMIT = 3
     const META_RETRY_DELAY_MS = 2000
+    // A session's own preset projection cannot tell "still on the deployment
+    // default" from "the user explicitly chose the deployment default": both
+    // read as the default id, so the reconciler must not re-bind the second
+    // case. Committed selections outside the binding set are remembered here,
+    // across reloads, because a reload re-reads only the projection.
+    const USER_CHOSEN_KEY = 'dsh-workspace-presets/user-chosen'
 
     const en = {
       nav: 'Workspace presets',
@@ -232,6 +238,25 @@ window.__ModuleLoader__.load({
       return typeof value === 'string' ? value : undefined
     }
 
+    /** Sessions whose preset the user picked explicitly, carried over from a previous page. */
+    function loadUserChosen() {
+      try {
+        const parsed = JSON.parse(window.localStorage.getItem(USER_CHOSEN_KEY) ?? '[]')
+        return new Set(Array.isArray(parsed) ? parsed.filter(id => typeof id === 'string') : [])
+      } catch {
+        return new Set()
+      }
+    }
+
+    /** Persist the explicit-pick set; unavailable storage must not break the page. */
+    function saveUserChosen(userChosen) {
+      try {
+        window.localStorage.setItem(USER_CHOSEN_KEY, JSON.stringify([...userChosen]))
+      } catch {
+        // Private mode or a blocked origin: the marker still holds for this page.
+      }
+    }
+
     function defineClient(ctx) {
       ctx.effect(() => ctx.locale.register(LOCALE_NS, { zh, en }), 'dsh-workspace-presets: locale dictionaries')
       const t = ctx.locale.bind(LOCALE_NS)
@@ -244,6 +269,7 @@ window.__ModuleLoader__.load({
       ctx.effect(() => () => { styleEl.remove() }, 'dsh-workspace-presets: scoped stylesheet')
 
       const meta = createStore(META_INITIAL)
+      const userChosen = loadUserChosen()
       const inFlight = new Set()
       let metaFailures = 0
       let metaRetry = null
@@ -345,6 +371,18 @@ window.__ModuleLoader__.load({
           ctx.on('connection/reset', () => { void refreshMeta() }),
           ctx.remote.$on('settings/document-updated', (ns) => {
             if (ns === SETTINGS_NS) void refreshMeta()
+          }),
+          // Reconciliation only ever selects a workspace binding, so a commit
+          // outside that set is the user's own pick. Without this record the
+          // reconciler reads a chosen deployment default as "still unclaimed"
+          // and re-applies the binding over it.
+          ctx.remote.$on('agent-preset/selected', (sessionId, agentPreset) => {
+            const bindingValues = new Set(meta.getSnapshot().bindings.map(entry => entry.agentPreset))
+            if (bindingValues.has(agentPreset)) return
+            const id = String(sessionId)
+            if (userChosen.has(id)) return
+            userChosen.add(id)
+            saveUserChosen(userChosen)
           }),
         ]
         return () => { for (const dispose of disposers) dispose() }
@@ -497,6 +535,9 @@ window.__ModuleLoader__.load({
                 if (session === undefined || session.blank !== true) continue
                 // Subagents join their parent's composition; never re-link them.
                 if (session.origin === 'subagent' || session.parentId !== undefined) continue
+                // An explicit pick outlives the workspace binding; without this
+                // the chosen deployment default below reads as "never chosen".
+                if (userChosen.has(sessionId)) continue
                 const current = presetOf(session)
                 if (current === binding) continue
                 const runsDefault = snapshot.defaultPresetId === undefined

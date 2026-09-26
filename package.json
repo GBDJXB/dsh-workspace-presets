@@ -1,7 +1,7 @@
 {
   "name": "dsh-workspace-presets",
-  "version": "0.1.1",
-  "description": "Per-workspace Agent preset bindings for DeepSeek Harness: bind a preset to a workspace once and every new session there boots with it.",
+  "version": "0.2.0",
+  "description": "Per-workspace Agent preset bindings for DeepSeek Harness: bind a preset to a workspace once and every new session there boots with it. Works on both DSH editions — 0.1.5-and-older named settings namespaces and 0.1.7-and-newer per-entry settings.",
   "type": "module",
   "main": "host.js",
   "exports": {
@@ -13,6 +13,7 @@
     "host.js",
     "client.js",
     "cordis.patch.yml",
+    "scripts",
     "README.md",
     "README.zh.md",
     "LICENSE"
@@ -61,6 +62,6 @@
     "react": "^18.2.0"
   },
   "dependencies": {
-    "@deepseek-ai/schemastery": "^3.18.1"
+    "@deepseek-ai/schemastery": "^3.18.4"
   }
 }

@@ -10,16 +10,27 @@
 # profile boot then merges THIS patch (a single `insert` of the plugin row)
 # exactly like the manual mount line below. No profile file edits needed.
 #
+# THE ROW ID IS LOAD-BEARING — do not "tidy" it to `workspace-presets`.
+#
+# DSH >= 0.1.7 stores settings per Loader ENTRY: the entry id IS the settings
+# section name. The Web half looks the bindings section up by name, so mounting
+# the row as `workspace-agent-presets` is what makes both generations publish
+# the same one — 0.1.5 and older register that namespace explicitly from
+# host.js, 0.1.7 and newer take it from this id. A different id still mounts
+# the plugin, but the settings page then reports the Host half as missing; the
+# Web half also accepts the pre-0.1.7 id `workspace-presets` as a fallback, so
+# an existing manual mount keeps working either way.
+#
 # Manual mount (alternative to the bundle channel) — append to the profile's
 # cordis.patch.yml:
 #
 #   - insert:
-#       - id: workspace-presets
+#       - id: workspace-agent-presets
 #         name: 'dsh-workspace-presets'
 #
 # Do not combine both channels for the same profile: two rows mount the
-# package twice, the settings namespace registers twice, and the second
+# package twice, the settings section registers twice, and the second
 # registration fails loud at boot.
 - insert:
-    - id: workspace-presets
+    - id: workspace-agent-presets
       name: 'dsh-workspace-presets'

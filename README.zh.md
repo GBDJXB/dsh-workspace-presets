@@ -4,7 +4,7 @@
 
 <div align="center">
   <a href="https://opensource.org/licenses/MIT"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-yellow.svg" /></a>
-  <img alt="支持的 DSH 版本:0.1.5-rc.1" src="https://img.shields.io/badge/DSH-0.1.5--rc.1-4d6bfe" />
+  <img alt="支持的 DSH 版本:0.1.5 与 0.1.7" src="https://img.shields.io/badge/DSH-0.1.5%20%7C%200.1.7-4d6bfe" />
   <img alt="工作区预设" src="https://img.shields.io/badge/-工作区预设-4d6bfe" /> <img alt="自动套用" src="https://img.shields.io/badge/-自动套用-4d6bfe" /> <img alt="中英双语" src="https://img.shields.io/badge/-中英双语-4d6bfe" />
   <!-- 发布到 npm 后可补充:npm 版本 / 下载量 / GitHub stars 徽章。 -->
 </div>
@@ -32,13 +32,21 @@
 
 **前置条件**:DSH 部署包含 Agent 预设(标准安装即有),且 PATH 里有 `pnpm`(`dsh plugin` 内部转发给 pnpm)。
 
-**支持的 DSH 版本**:`0.1.5-rc.1`(peer 范围;其内部 client 包为 `0.1.5-rc.2`)。
+**支持的 DSH 版本**:两代设置模型都支持——`0.1.5` 线(命名命名空间式设置;npm 的 `dsh web`)与 `0.1.7` 线(按 Loader 条目存设置;DSH Desktop 2.x)。
 
 **从 npm 安装**(发布后):
 
 ```sh
 dsh plugin --profile web add dsh-workspace-presets
 ```
+
+**DSH Desktop** 用自己的 profile 装插件,所以也要在那边装一次:
+
+```powershell
+dsh plugin --profile desktop add link:<本目录的绝对路径>
+```
+
+然后看下面的[DSH 世代与 Agent 预设](#dsh-世代与-agent-预设):Desktop 那条线不读文件系统预设目录,你在 `dsh web` 用的预设需要为它声明一次。
 
 **直接从 GitHub 安装(无需克隆):**
 
@@ -85,6 +93,9 @@ dsh plugin --profile web add .\dsh-workspace-presets   # 或:dsh plugin --profil
 | 页面出现「读取失败:…」或整页空白 | 该提示只在 Host 半部分未加载、或旧版 client 与新宿主不匹配时出现。用 `dsh plugin --profile web add dsh-workspace-presets@latest` 升级到与本 DSH 同版本线的插件,再重启 + 硬刷新。 |
 | 已绑定工作区的新会话仍用全局默认预设 | 绑定只作用于**空白**会话,hero 屏手动选择永远优先,子代理会话不受影响;已开始的会话按设计不切换。 |
 | 插件被挂载两次 / 启动时命名空间注册报错 | 你把 bundle 通道与手动 `cordis.patch.yml` 插入行同时用上了——二选一。 |
+| 自己写的预设在 DSH Desktop(0.1.7 线)里找不到 | 那条线没有文件系统预设名单;跑 `scripts/mirror-agent-presets.mjs --profile desktop` 再重启应用。 |
+| 启动报 `ctx.settings.register is not a function` | 0.1.7 线上跑的是 0.2.0 之前的构建(那代设置是「按条目 config」)。升级插件。 |
+| 启动告警 `patch: entry "workspace-agent-presets" not found` | 该 profile 的 `dsh.profile.bundles` 里没有本插件,绑定行是惰性的。先把插件装进 profile。 |
 
 </details>
 
@@ -120,27 +131,68 @@ dsh plugin --profile web remove dsh-workspace-presets
 然后重启 profile。若只想**临时禁用**,在该 profile 的 `cordis.patch.yml` 里追加:
 
 ```yaml
-- id: workspace-presets
+- id: workspace-agent-presets
   disabled: true
 ```
 
-**残留政策**:插件不写任何自有文件——所有运行时效果(槽位注册、事件监听、样式、设置命名空间)随插件一起移除。唯一可能的残留是 DSH 自己的设置文档里一段**惰性**的 `workspace-agent-presets:` 小节:没有任何命名空间解析它,不影响任何功能。想彻底清掉,卸载前点 **设置 → 工作区预设 → 清除全部绑定**(内部调用 `settings.replace` 清空),或之后手动删除设置文档里的该小节。
+**残留政策**:插件不写任何自有文件——所有运行时效果(槽位注册、事件监听、样式、设置小节)随插件一起移除。唯一可能的残留是一段**惰性**配置:`0.1.5` 及更早是 `settings.yaml` 里的 `workspace-agent-presets:` 小节,`0.1.7` 及更新是 profile patch 里该条目的 `config`。没有任何东西解析它,不影响任何功能。想彻底清掉,卸载前点 **设置 → 工作区预设 → 清除全部绑定**(内部调用 `settings.replace` 清空),或之后手动删除该小节。
+
+## DSH 世代与 Agent 预设
+
+**绑定存在哪里。** 两代 DSH 存设置的方式不同,插件用同一份源码同时覆盖:
+
+| | DSH ≤ 0.1.5(npm 的 `dsh web`) | DSH ≥ 0.1.7(DSH Desktop 2.x) |
+|---|---|---|
+| 设置模型 | 命名命名空间 | 按 Loader 条目的 config |
+| 绑定位置 | `$DSH_HOME/settings.yaml` 的 `workspace-agent-presets:` 小节 | `$DSH_HOME/profiles/<profile>/cordis.patch.yml` 里 `workspace-agent-presets` 条目的 `config` |
+| Host 半部分 | 调用 `settings.register('workspace-agent-presets', …)` | 导出 `Config`,其 `bindings` 字段标记为 volatile |
+
+在 0.1.7 上**小节名是关键**:Loader 条目 id 就是设置名,所以 `cordis.patch.yml` 用 `id: workspace-agent-presets` 挂载这一行。Web 半部分同时接受 0.1.7 之前的短 id `workspace-presets`,因此以前那样挂载的 profile 依旧可用。除此之外不做版本嗅探:`settings.register` 只在该服务确实提供它时才调用。
+
+**预设从哪来。** 这部分是 DSH 的差异,不是插件造成的:
+
+- **≤ 0.1.5** 扫描文件系统:`$DSH_HOME/.agent-presets/<id>/`,每个预就是一个目录,内含 `agent.cordis.yml` 与可选的 `preset.yml`。
+- **≥ 0.1.7** 完全没有文件系统名单。预设只以 composition 里的 `@deepseek-ai/dsh-agent-preset` 行存在,其 `config.plugins` 列表**就是**那份 composition。
+
+所以为旧线写的预设,在新线看见之前必须先被声明。`scripts/mirror-agent-presets.mjs` 会为你用户根目录下的每个预设写入该声明,落在脚本自己拥有的标记区块里:
+
+```sh
+# --runtime-modules 可重复:把目标 profile 能解析预设行的每一棵树都列出来。
+# 不给的话,包行不会被检查。
+node scripts/mirror-agent-presets.mjs --profile desktop \
+  --runtime-modules "$LOCALAPPDATA/Programs/DSH Desktop/resources/app/node_modules" \
+  --runtime-modules "$DSH_HOME/profiles/desktop/node_modules"
+
+node scripts/mirror-agent-presets.mjs --profile desktop --dry-run   # 只打印计划,不写文件
+node scripts/mirror-agent-presets.mjs --profile desktop --restore <workspaceId>:<presetId>,...
+```
+
+`--restore` 会顺带写入插件自己的设置行——这是把 0.1.7 丢掉旧 `settings.yaml` 小节之前记录的绑定带过来的方式。已存在的行**永不覆盖**:设置界面写过一次之后,绑定就属于你而不是脚本。
+
+改过任何 `agent.cordis.yml` 之后重跑即可:标记区块原地重写,文件里其他所有行(包括设置界面写入的那些)逐字节保留。
+
+> 声明式预设没有自己的目录:它的行相对 profile 解析,而不是相对预设文件夹。所以脚本只改写那些搬不过去的行——相对的 `./plugins/...` 行名变成 `file:///` URL,`skill-filesystem` 的 `customSkillDirs` 变成该目录的绝对路径,0.1.7 线改过名的包改成新名字(`@deepseek-ai/dsh-workflow-worker-thread` → `@deepseek-ai/dsh-workflow-ptc`,也就是 0.1.7 自带 `standard` 预设声明的那一行)。其余只改缩进,因此两代挂载的是同一份 composition。
+
+> **包行是最容易踩的地方。** 两条线解析预设行的树不同,所以某个包只存在于*别的* profile 的 `node_modules` 里时,这一行在目标 profile 上什么都挂不上:DSH 会把这个预设标成损坏(宿主日志里是 `PackageOverlayNotFoundError … never started`),而不是启动失败,然后新会话就不能再用它了。`--runtime-modules` 就是用来抓这件事的,也是它要求列出全部根、而不是"第一个能解析的根"的原因。
 
 ## 兼容性
 
-- **非侵入**:UI 只占两个新 id 的附加槽位(`settings.section` 的 `workspace-presets`、`shell.overlay` 的 `workspace-presets.overlay`),不补丁、不替换任何官方 UI。
-- **只用官方 API**:设置命名空间 + `settings.describe/update/replace`、`agentPresets.list/select`、`slots`/`locale`/`connection`/`remote`/`timer` 服务、`sessions`/`workspaces` 列表 store。
-- **0.1.5 Remote 约定**:所有调用走 `ctx.remote.<命名空间>.<方法>(位置参数)`,返回 `RemoteResult`(`{ok:true,value}` / `{ok:false,error}`);已移除的 `ctx.connection.api` 与 `{result:{ok,value}}` 信封不再使用。每个 Remote 命名空间是**独立的 cordis 服务**(键为 `remote.<命名空间>`),所以插件 `inject` 里必须声明 `remote.agentPresets` 与 `remote.settings`——未声明时上下文代理会直接抛 `cannot get property "remote.agentPresets" without inject`。会话自身的预设读 `session.projectionValues.agentPreset`(会话列表摘要里已没有该字段)。
+- **非侵入**:UI 只占两个新 id 的附加槽位(`settings.section` 的 `workspace-presets`、`shell.overlay` 的 `workspace-presets.overlay`),不补丁、不替换任何官方 UI。(那是槽位条目 id;Host 发布的设置小节名是 `workspace-agent-presets`,挂载行用同一个 id。)
+- **只用官方 API**:`settings.describe/update/replace`、`agentPresets.list/select`、`slots`/`locale`/`connection`/`remote`/`timer` 服务、`sessions`/`workspaces` 列表 store。设置**小节**在 0.1.5 及更早通过 `settings.register` 注册,在 0.1.7 及更新则声明为插件自己的 `Config`。
+- **0.1.5 Remote 约定,0.1.7 上不变**:所有调用走 `ctx.remote.<命名空间>.<方法>(位置参数)`,返回 `RemoteResult`(`{ok:true,value}` / `{ok:false,error}`);已移除的 `ctx.connection.api` 与 `{result:{ok,value}}` 信封不再使用。每个 Remote 命名空间是**独立的 cordis 服务**(键为 `remote.<命名空间>`),所以插件 `inject` 里必须声明 `remote.agentPresets` 与 `remote.settings`——未声明时上下文代理会直接抛 `cannot get property "remote.agentPresets" without inject`。会话自身的预设读 `session.projectionValues.agentPreset`。设置小节从 `settings.describe()` 按名字解析而非假定,写入跟随实际应答的那个名字。
 - **不写文件**:绑定存在 DSH 自己的设置文档里;插件从不创建或删除预设目录、会话日志或私有存储。
+- **小节字段是 volatile 的,这带来一个版本下限。** 在 0.1.7 及更新版本上,设置写入通过 loader 的 volatile 快路径送达*正在运行*的插件:只改动 schema 声明为 volatile 的字段时,新值被写进活动配置已持有的引用,而不是重启插件(`Entry.update` → `_commitVolatile`)。这种引用只有在 schema 把该字段包成 cosmokit `Volatile` 时才存在,而 `@deepseek-ai/schemastery` 从 **3.18.4** 起才这么做——本包依赖的正是该版本。用更旧的副本时,解析出的字段是普通值,loader 找不到引用、却把这次提交报告为成功,于是**继续沿用旧配置**:页面会接受改动,然后在下次启动前一直读回旧值。因此 Host 半部分在缺少 `.volatile()` 的 schemastery 旁会直接拒绝加载,而不是接受一次无法落地的保存;已装的副本必须重装(`dsh plugin --profile <name> add …@latest`)才能带上新依赖。
 - **多标签安全**:套用操作幂等且由宿主按会话串行;设置写入带 revision 防冲突。
 
 ## 仓库结构
 
 ```
 dsh-workspace-presets/
-├── host.js            # Host 半部分:注册设置命名空间(约 40 行)
+├── host.js            # Host 半部分:绑定小节(≤0.1.5 走 settings.register,≥0.1.7 导出 Config)
 ├── client.js          # Web 半部分:设置页 + 常驻协调器 + toast
-├── cordis.patch.yml   # bundle 补丁:插入 host 插件行(id: workspace-presets)
+├── cordis.patch.yml   # bundle 补丁:插入 host 插件行(id: workspace-agent-presets)
+├── scripts/
+│   └── mirror-agent-presets.mjs   # 为 DSH ≥ 0.1.7 声明 .agent-presets 里的预设
 ├── package.json       # 双面清单(main → host.js,./client → client.js)
 ├── .gitignore         # node_modules/(本地链接安装会产生)
 ├── LICENSE            # MIT

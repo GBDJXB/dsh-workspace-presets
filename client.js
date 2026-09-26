@@ -22,6 +22,13 @@
  * A session's preset now rides the `agentPreset` session projection instead of
  * a field on the session list summary.
  *
+ * The Host section is named `workspace-agent-presets` on every generation this
+ * plugin supports. DSH <= 0.1.5 registers that settings namespace by name;
+ * DSH >= 0.1.7 keys a settings section by Loader entry id instead, and the
+ * host bundle mounts its row under the same id so one constant finds either.
+ * A profile that mounted the row under the pre-0.1.7 id stays readable through
+ * SETTINGS_NS_FALLBACK, and every write follows whichever name answered.
+ *
  * Visuals follow the shipped 0.1.5 settings UI: the panel shell paints no
  * section title, so the section renders its own <h2> heading and intro; rows
  * are 16px-padded flex rows on --dsw-alias-border-l2; the picker follows the
@@ -36,6 +43,11 @@ window.__ModuleLoader__.load({
     const { createElement, useEffect, useState } = React
 
     const SETTINGS_NS = 'workspace-agent-presets'
+    // DSH >= 0.1.7 names a settings section after its Loader entry id, and this
+    // plugin's own row used the shorter id before that generation existed. An
+    // older mount keeps working: whichever name describe() answers with is the
+    // one every read and write below uses.
+    const SETTINGS_NS_FALLBACK = 'workspace-presets'
     const LOCALE_NS = 'workspacePresets'
     // Style-tag identity: the 0.1.5 client module system claims <style> tags a
     // factory injected by their data-plugin/data-plugin-css marks, so tag ours.
@@ -152,6 +164,8 @@ window.__ModuleLoader__.load({
       error: null,
       writable: true,
       revision: undefined,
+      // The section name describe() actually answered with; writes target it.
+      namespace: undefined,
       bindings: [],
       presets: [],
       defaultPresetId: undefined,
@@ -307,9 +321,19 @@ window.__ModuleLoader__.load({
         metaFailures = 0
         const presets = Array.isArray(roster.value.presets) ? roster.value.presets : []
         const defaultPreset = presets.find((preset) => preset.isDefault === true)
-        const namespace = (described.value.namespaces ?? []).find((entry) => entry.ns === SETTINGS_NS)
+        const namespace = (described.value.namespaces ?? []).find(
+          (entry) => entry.ns === SETTINGS_NS || entry.ns === SETTINGS_NS_FALLBACK,
+        )
         if (namespace === undefined) {
-          meta.set({ ...meta.getSnapshot(), status: 'unavailable', error: null, presets, defaultPresetId: defaultPreset?.id })
+          meta.set({
+            ...meta.getSnapshot(),
+            status: 'unavailable',
+            error: null,
+            namespace: undefined,
+            bindings: [],
+            presets,
+            defaultPresetId: defaultPreset?.id,
+          })
           return
         }
         meta.set({
@@ -317,6 +341,7 @@ window.__ModuleLoader__.load({
           error: null,
           writable: described.value.writable !== false,
           revision: namespace.revision,
+          namespace: namespace.ns,
           bindings: namespace.value && Array.isArray(namespace.value.bindings) ? namespace.value.bindings : [],
           presets,
           defaultPresetId: defaultPreset?.id,
@@ -326,7 +351,7 @@ window.__ModuleLoader__.load({
       async function writeBindings(nextBindings, attempt) {
         const before = meta.getSnapshot()
         const wrote = await call(() => ctx.remote.settings.update(
-          SETTINGS_NS,
+          before.namespace ?? SETTINGS_NS,
           { bindings: nextBindings },
           typeof before.revision === 'number' ? before.revision : undefined,
         ))
@@ -348,7 +373,7 @@ window.__ModuleLoader__.load({
       async function clearAllBindings(attempt) {
         const before = meta.getSnapshot()
         const cleared = await call(() => ctx.remote.settings.replace(
-          SETTINGS_NS,
+          before.namespace ?? SETTINGS_NS,
           {},
           typeof before.revision === 'number' ? before.revision : undefined,
         ))
@@ -370,7 +395,9 @@ window.__ModuleLoader__.load({
         const disposers = [
           ctx.on('connection/reset', () => { void refreshMeta() }),
           ctx.remote.$on('settings/document-updated', (ns) => {
-            if (ns === SETTINGS_NS) void refreshMeta()
+            // Answer either name: the resolved section on DSH >= 0.1.7 may be
+            // the entry-id fallback, and a rename must still refresh the page.
+            if (ns === SETTINGS_NS || ns === SETTINGS_NS_FALLBACK) void refreshMeta()
           }),
           // Reconciliation only ever selects a workspace binding, so a commit
           // outside that set is the user's own pick. Without this record the

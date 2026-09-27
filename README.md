@@ -23,7 +23,7 @@
 
 ## What it does
 
-- Adds a native **"Workspace presets"** page to the DSH settings panel: one row per workspace, each with a preset picker (system / user presets, broken presets flagged). The page draws its own heading and intro — the 0.1.5 settings panel only supplies the nav and content columns, and no longer renders a per-section title.
+- Adds a native **"Workspace presets"** page to the DSH settings panel: one row per workspace, each with a preset picker (presets the deployment ships / presets you declared, broken presets flagged). The page draws its own heading and intro — the settings panel only supplies the nav and content columns, and does not render a per-section title.
 - **Applies the binding automatically** whenever a *blank* session belongs to a bound workspace — including the hidden reusable blank session the sidebar keeps per workspace, in every open tab.
 - Falls back cleanly: a workspace without a binding keeps DSH's normal behavior (global default, hero-screen chip). An explicit chip choice on a blank session always wins over the binding.
 - Sessions that have started, subagent sessions, or archived sessions will not be touched.
@@ -32,7 +32,7 @@
 
 **Prerequisites:** a DSH deployment that composes Agent presets (the standard install does), and `pnpm` on your PATH (`dsh plugin` forwards to pnpm).
 
-**Supported DSH versions:** both settings generations — the `0.1.5` line (named settings namespaces; the npm `dsh web`) and the `0.1.7` line (per-Loader-entry settings; DSH Desktop 2.x).
+**Supported DSH versions:** the `0.1.7` line, which is what the npm `dsh web` and DSH Desktop 2.x both run today (settings are per-Loader-entry config), and the older `0.1.5` line (named settings namespaces). The two are *settings generations*, not platforms: which one you are on is decided by the `dsh` version, not by web-versus-desktop. Every API this plugin calls beyond the settings section is identical on both.
 
 **From npm** (once published):
 
@@ -40,13 +40,13 @@
 dsh plugin --profile web add dsh-workspace-presets
 ```
 
-**DSH Desktop** keeps its plugins in its own profile, so install there as well:
+**Another profile** (DSH Desktop 2.x keeps its plugins in its own profile) installs the same way:
 
 ```powershell
 dsh plugin --profile desktop add link:<absolute path to this folder>
 ```
 
-Then read [DSH editions and agent presets](#dsh-editions-and-agent-presets): the Desktop line does not read the filesystem preset folder, so the presets your `dsh web` profile uses have to be declared once for it.
+Then read [DSH generations and agent presets](#dsh-generations-and-agent-presets): on the 0.1.7 line presets have to be declared in a composition, so the ones your `dsh web` profile uses may need the mirror script in each profile you run.
 
 **Straight from GitHub, without cloning:**
 
@@ -92,10 +92,12 @@ If anything fails, check the Troubleshooting table in the README before retrying
 | `dsh plugin` says pnpm is not found | Install pnpm (`npm i -g pnpm`) and re-run. |
 | Boot fails with `ERR_MODULE_NOT_FOUND … imported from …\host.js` | Local-folder install without the plugin's own deps: run `npm install` (or `pnpm install`) inside the repo, then restart. Registry/git installs never hit this. |
 | Settings page doesn't show after install | The Host half activates on a profile restart — restart `dsh web`, then hard-refresh the browser. |
-| The page shows "Could not load: …" or stays blank | That is the old client half talking to a newer DSH (or a Host half that never loaded). Upgrade with `dsh plugin --profile web add dsh-workspace-presets@latest` so the plugin matches your DSH version line, then restart + hard-refresh. |
+| The page shows "Could not load: …" or stays blank | That is an older client half talking to a newer DSH (or a Host half that never loaded). Upgrade with `dsh plugin --profile web add dsh-workspace-presets@latest` so the plugin matches your DSH version line, then restart + hard-refresh. |
+| The page says the Host half is not loaded | `settings.describe()` returned none of the names this plugin looks for (`workspace-agent-presets`, then the package name, then `workspace-presets`). Either the plugin is not mounted in this profile (see the last row) or its `Config` schema declares no volatile field, in which case DSH does not offer the entry to a settings surface at all. |
+| Saving shows `Config field "bindings" is not volatile` | The mounted Host half is not this build: it exports a section DSH will not write to. Reinstall the plugin and restart the profile. |
 | A bound workspace's new session still starts with the default preset | The binding only applies to **blank** sessions, and a manual hero-chip choice always wins; subagent sessions are never touched. Already-started sessions are fixed by design. |
 | Plugin mounts twice / namespace registration fails at boot | You combined the bundle channel with a manual `cordis.patch.yml` insert — keep only one. |
-| A preset you authored is missing on DSH Desktop (0.1.7 line) | That line has no filesystem preset roster; run `scripts/mirror-agent-presets.mjs --profile desktop` and restart the app. |
+| A preset you authored is missing on the 0.1.7 line | That line has no filesystem preset roster; run `scripts/mirror-agent-presets.mjs --profile <name>` and restart the profile. |
 | Boot fails with `ctx.settings.register is not a function` | A pre-0.2.0 build on the 0.1.7 line, where settings are per-entry config. Upgrade the plugin. |
 | Boot warns `patch: entry "workspace-agent-presets" not found` | The plugin is not in that profile's `dsh.profile.bundles`; the bindings row is then inert. Install the plugin into the profile first. |
 
@@ -139,17 +141,17 @@ then restart the profile. To **disable temporarily** instead, append to the prof
 
 **Residue policy:** the plugin creates no files of its own — every runtime effect (slots, listeners, styles, the settings section) is removed with it. The only possible remainder is an **inert** section: the `workspace-agent-presets:` block of `settings.yaml` on 0.1.5-and-older, or that entry's `config` in the profile patch on 0.1.7-and-newer. Nothing resolves it, so it affects nothing. To purge it cleanly, click **Settings → Workspace presets → Clear all bindings** before removing the plugin, or delete the section afterwards.
 
-## DSH editions and agent presets
+## DSH generations and agent presets
 
-**Where the bindings live.** The two DSH lines store settings differently, and the plugin covers both from one source:
+**Where the bindings live.** The two DSH settings generations store a section differently, and the plugin covers both from one source:
 
-| | DSH ≤ 0.1.5 (npm `dsh web`) | DSH ≥ 0.1.7 (DSH Desktop 2.x) |
+| | DSH ≤ 0.1.5 | DSH ≥ 0.1.7 (current: npm `dsh web`, DSH Desktop 2.x) |
 |---|---|---|
 | Settings model | named namespaces | per-Loader-entry config |
 | Bindings live in | the `workspace-agent-presets:` section of `$DSH_HOME/settings.yaml` | the `workspace-agent-presets` entry's `config` in `$DSH_HOME/profiles/<profile>/cordis.patch.yml` |
 | Host half | calls `settings.register('workspace-agent-presets', …)` | exports a `Config` whose `bindings` field is marked volatile |
 
-The section **name** is load-bearing on 0.1.7, where the Loader entry id *is* the settings name — which is why `cordis.patch.yml` mounts the row as `id: workspace-agent-presets`. The Web half also accepts the shorter pre-0.1.7 id `workspace-presets`, so a profile that mounted it that way keeps working. Nothing else is version-sniffed: `settings.register` is simply called only where the service provides it.
+The section **name** is load-bearing on 0.1.7, where the Loader entry id *is* the settings name — which is why `cordis.patch.yml` mounts the row as `id: workspace-agent-presets`. The Web half resolves the section from `settings.describe()` by that name first, then by the package name, then by the shorter pre-0.1.7 id `workspace-presets`, and every read and write follows whichever name actually answered. Nothing else is version-sniffed: `settings.register` is simply called only where the service provides it.
 
 **Where the presets come from.** This part is DSH's, not the plugin's, and the two lines differ:
 
@@ -161,12 +163,11 @@ So a preset authored for the older line is invisible to the newer one until it i
 ```sh
 # `--runtime-modules` is repeatable: name every tree the target profile
 # resolves a preset row from. Without it, package rows go unchecked.
-node scripts/mirror-agent-presets.mjs --profile desktop \
-  --runtime-modules "$LOCALAPPDATA/Programs/DSH Desktop/resources/app/node_modules" \
-  --runtime-modules "$DSH_HOME/profiles/desktop/node_modules"
+node scripts/mirror-agent-presets.mjs --profile web \
+  --runtime-modules "$DSH_HOME/profiles/web/node_modules"
 
-node scripts/mirror-agent-presets.mjs --profile desktop --dry-run   # print the plan, write nothing
-node scripts/mirror-agent-presets.mjs --profile desktop --restore <workspaceId>:<presetId>,...
+node scripts/mirror-agent-presets.mjs --profile web --dry-run   # print the plan, write nothing
+node scripts/mirror-agent-presets.mjs --profile web --restore <workspaceId>:<presetId>,...
 ```
 
 `--restore` additionally writes the plugin's settings row, which is how a binding recorded before 0.1.7 dropped the old `settings.yaml` section is carried across. An existing row is never overwritten — after the settings surface has written once, the bindings belong to you, not to the script.
@@ -180,10 +181,11 @@ Re-run it after editing any `agent.cordis.yml`. The marked region is rewritten i
 ## Compatibility
 
 - **Non-invasive.** UI lives only in two additive slots with fresh ids (`settings.section` entry `workspace-presets`, `shell.overlay` entry `workspace-presets.overlay`); no shipped UI is patched or replaced. (Those are slot entry ids; the settings section the Host publishes is `workspace-agent-presets`, and the mount row carries the same id.)
-- **Official APIs only.** `settings.describe/update/replace` and `agentPresets.list/select`, the `slots`/`locale`/`connection`/`remote`/`timer` services, and the `sessions`/`workspaces` list stores. The settings *section* is registered through `settings.register` on 0.1.5-and-older and declared as this plugin's own `Config` on 0.1.7-and-newer.
-- **0.1.5 Remote contract, unchanged on 0.1.7.** Every call goes through `ctx.remote.<namespace>.<method>(positional args)` and answers with the `RemoteResult` branch (`{ok:true,value}` / `{ok:false,error}`); the removed `ctx.connection.api` object envelope (`{result:{ok,value}}`) is not used. Each Remote namespace is its own cordis service (`remote.<namespace>`), so `remote.agentPresets` and `remote.settings` are declared in the plugin's `inject` list — an undeclared `ctx.remote.<ns>` is refused with `cannot get property "remote.agentPresets" without inject`. A session's own preset is read from `session.projectionValues.agentPreset`. The settings section is looked up by name in `settings.describe()` rather than assumed, and writes follow whichever name answered.
+- **Official APIs only.** `settings.describe/update/replace` and `agentPresets.list/select`, the `slots`/`locale`/`connection`/`remote`/`timer` services, and the `sessions`/`workspaces` list stores. The settings *section* is declared as this plugin's own `Config` on 0.1.7-and-newer and registered through `settings.register` on 0.1.5-and-older.
+- **Remote contract.** Every call goes through `ctx.remote.<namespace>.<method>(positional args)` and answers with the `RemoteResult` branch (`{ok:true,value}` / `{ok:false,error}`); the removed `ctx.connection.api` object envelope (`{result:{ok,value}}`) is not used. Each Remote namespace is its own cordis service (`remote.<namespace>`), so `remote.agentPresets` and `remote.settings` are declared in the plugin's `inject` list — an undeclared `ctx.remote.<ns>` is refused with `cannot get property "remote.agentPresets" without inject`. A session's own preset is read from `session.projectionValues.agentPreset`. `agentPresets.select` answers with the preset the session now runs, or a refusal.
 - **No files written.** Bindings persist in DSH's own settings document; the plugin never creates or deletes preset directories, session logs, or its own storage.
-- **The section field is volatile, and that has a version floor.** On 0.1.7-and-newer a settings write reaches the *running* plugin through the loader's volatile fast path: a change confined to schema-declared volatile fields is committed into the references the live config already holds instead of re-initializing the plugin (`Entry.update` → `_commitVolatile`). Such a reference exists only when the schema wrapped the field in a cosmokit `Volatile`, which `@deepseek-ai/schemastery` started doing in **3.18.4** — the version this package depends on. With an older copy the resolved field is a plain value, the loader finds no reference, reports the commit as successful, and **keeps the old config**: a page would accept a change and then read it back unchanged until the next boot. The Host half therefore refuses to load beside a schemastery without `.volatile()` instead of accepting a save it cannot apply, and an existing install must be reinstalled (`dsh plugin --profile <name> add …@latest`) so the new dependency lands.
+- **The section field is volatile, and that is what makes the page exist.** On 0.1.7-and-newer DSH builds every entry's settings page from `volatileForm(schema)` — the fields whose nearest ancestor is marked volatile. An entry that declares none is absent from `settings.describe()` and its writes are refused outright, so the mark is required, not decorative. It also selects the live-commit fast path: a change confined to volatile fields is committed into the references the running config already holds instead of re-initializing the plugin (`Entry.update` → `_commitVolatile`). Such a reference exists only when the schema wrapped the field in a cosmokit `Volatile`, which `@deepseek-ai/schemastery` started doing in **3.18.4** — the version this package depends on. With an older copy the resolved field is a plain value, the loader finds no reference, reports the commit as successful, and **keeps the old config**. The Host half therefore refuses to load beside a schemastery without `.volatile()` instead of accepting a save it cannot apply, and an existing install must be reinstalled (`dsh plugin --profile <name> add …@latest`) so the new dependency lands.
+- **Preset rows carry no source field.** The roster reports `{id, isDefault, name?, description?, broken?}`; there is no "system versus user" flag. The picker therefore follows the shipped screen's convention — a preset that publishes no display name and whose id is one of the shipped ones is labelled built-in, everything else is shown under its own name.
 - **Multi-tab safe.** Selects are idempotent and Host-serialized per session; settings writes are revision-guarded.
 
 ## Repository layout
@@ -216,30 +218,33 @@ No build step, no `lib/`, no generated files — the repository **is** the shipp
     "bundle": { "patch": "./cordis.patch.yml" },
     "client": {
       "platform": "web",
+      "immediately": true,
       "inject": [
         "@deepseek-ai/dsh-api-remotes",
         "@deepseek-ai/dsh-api-session-controller",
         "@deepseek-ai/dsh-api-workspace-controller",
         "@deepseek-ai/dsh-client-connection",
         "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-layout",
         "@deepseek-ai/dsh-client-ui-renderer",
-        "@deepseek-ai/dsh-client-ui-settings",
         "@deepseek-ai/dsh-client-ui-session",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-slots",
         "@deepseek-ai/dsh-client-ui-workspace"
       ]
     }
   },
-  "dependencies": { "@deepseek-ai/schemastery": "^3.18.1" }
+  "dependencies": { "@deepseek-ai/schemastery": "^3.18.4" }
 }
 ```
 
-(`dsh.client.inject` mirrors the 0.1.5 shipped `ui-workspace` / `ui-agent-preset` client packages; when you target another DSH version, sync it with the `@deepseek-ai/*` client packages that version actually publishes. The field is loading/prefetch metadata, not Cordis service injection — the browser module-table baseline already carries `react`, `@deepseek-ai/dsh-client-ui-slots`, `@deepseek-ai/dsh-client-ui-primitives`, and friends, so they need no declaration.)
+(`dsh.client.inject` mirrors the client packages the shipped `ui-workspace` / `ui-agent-preset` / `ui-settings` bundles declare; when you target another DSH version, sync it with the `@deepseek-ai/*` client packages that version actually publishes. The field is module-graph ordering metadata, not Cordis service injection — the browser module-table baseline already carries `react`, `@deepseek-ai/dsh-client-ui-slots`, `@deepseek-ai/dsh-client-ui-primitives`, and friends, so they need no declaration. A name with no matching bundle row only loses its graph edge; it is not an error.)
 
 ## Development
 
 Plain JavaScript (ESM), no build step, no bundler, no JSX — the repo is the shipped package. `client.js` is a hand-written `window.__ModuleLoader__.load(...)` module using `React.createElement`; the only Host import is `@deepseek-ai/schemastery`, the same fork DSH's own `settings` service validates schemas against.
 
-Editing `client.js` is picked up by the 0.1.5 client HMR watcher (it polls bundle mtimes and reloads that bundle; hard-refresh if in doubt). Editing `host.js` or `package.json` needs a profile restart.
+Editing `client.js` needs only a browser refresh once the Host side is mounted (the client module system rebuilds the graph from the bundle's mtime); editing `host.js` or `package.json` needs a profile restart.
 
 ## License
 

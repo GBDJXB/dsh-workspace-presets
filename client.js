@@ -15,23 +15,24 @@
  *      (agentPresets.select). It never touches started sessions, subagent
  *      sessions, or sessions whose preset was chosen explicitly.
  *
- * DSH 0.1.5 wire contract: every Remote call goes through `ctx.remote` with
- * positional arguments and answers with the RemoteResult branch
- * (`{ok:true, value}` / `{ok:false, error}`) — the older `ctx.connection.api`
- * object envelope (`{result: {ok, value}}`, arguments as one object) is gone.
- * A session's preset now rides the `agentPreset` session projection instead of
- * a field on the session list summary.
+ * Remote wire contract (unchanged across the generations this plugin
+ * supports): every call goes through `ctx.remote` with positional arguments
+ * and answers with the RemoteResult branch (`{ok:true, value}` /
+ * `{ok:false, error}`) — the older `ctx.connection.api` object envelope
+ * (`{result: {ok, value}}`, arguments as one object) is gone. A session's
+ * preset rides the `agentPreset` session projection instead of a field on the
+ * session list summary.
  *
- * The Host section is named `workspace-agent-presets` on every generation this
- * plugin supports. DSH <= 0.1.5 registers that settings namespace by name;
- * DSH >= 0.1.7 keys a settings section by Loader entry id instead, and the
- * host bundle mounts its row under the same id so one constant finds either.
- * A profile that mounted the row under the pre-0.1.7 id stays readable through
- * SETTINGS_NS_FALLBACK, and every write follows whichever name answered.
+ * The Host section is named `workspace-agent-presets`. On the current line
+ * (0.1.7) the Loader entry id IS the settings name, so the entry mounted by
+ * the bundle patch is what makes that name answer; DSH <= 0.1.5 registered the
+ * same name explicitly from host.js. `describe()` is asked for each candidate
+ * name and whichever one answers is the one every read and write uses, so a
+ * profile that mounted the row under a different id also keeps working.
  *
- * Visuals follow the shipped 0.1.5 settings UI: the panel shell paints no
- * section title, so the section renders its own <h2> heading and intro; rows
- * are 16px-padded flex rows on --dsw-alias-border-l2; the picker follows the
+ * Visuals follow the shipped settings UI: the panel shell paints no section
+ * title, so the section renders its own <h2> heading and intro; rows are
+ * 16px-padded flex rows on --dsw-alias-border-l2; the picker follows the
  * settings-native input recipe (34px height, 8px radius, .5px
  * --dsw-alias-border-l4 on --dsw-alias-bg-layer-3, tertiary 12×12 chevron), so
  * light/dark themes keep working through the DSH tokens.
@@ -43,13 +44,19 @@ window.__ModuleLoader__.load({
     const { createElement, useEffect, useState } = React
 
     const SETTINGS_NS = 'workspace-agent-presets'
-    // DSH >= 0.1.7 names a settings section after its Loader entry id, and this
-    // plugin's own row used the shorter id before that generation existed. An
-    // older mount keeps working: whichever name describe() answers with is the
-    // one every read and write below uses.
-    const SETTINGS_NS_FALLBACK = 'workspace-presets'
+    /**
+     * Names the bindings section may answer under, most likely first.
+     *
+     * On the current line (0.1.7) the settings name is the Loader entry id, and
+     * the bundle patch mounts this plugin's row as `workspace-agent-presets`
+     * (`cordis.patch.yml`), so SETTINGS_NS answers. The other two cover mounts
+     * this plugin does not control: a hand-edited row naming the package
+     * instead, and the shorter pre-0.1.7 id. Only a name `describe()` actually
+     * returns is ever read or written.
+     */
+    const SETTINGS_NS_CANDIDATES = [SETTINGS_NS, 'dsh-workspace-presets', 'workspace-presets']
     const LOCALE_NS = 'workspacePresets'
-    // Style-tag identity: the 0.1.5 client module system claims <style> tags a
+    // Style-tag identity: the client module system claims <style> tags a
     // factory injected by their data-plugin/data-plugin-css marks, so tag ours.
     const PLUGIN_ID = 'dsh-workspace-presets'
     const STYLE_TAG_ID = 'dsh-workspace-presets/settings.css'
@@ -69,7 +76,7 @@ window.__ModuleLoader__.load({
       nav: 'Workspace presets',
       description: 'Bind an Agent preset to a workspace and every new session started there boots with it. Only blank sessions are switched; a preset you pick manually always wins.',
       followDefault: 'Follow global default ({preset})',
-      userPreset: 'user',
+      builtInPreset: 'built-in',
       brokenPreset: 'broken',
       clearAll: 'Clear all bindings',
       cleared: 'All bindings cleared.',
@@ -88,7 +95,7 @@ window.__ModuleLoader__.load({
       nav: '工作区预设',
       description: '为工作区绑定 Agent 预设后,该工作区内新建的会话会自动以该预设启动。仅作用于尚未开始的空白会话;手动选择的预设始终优先。',
       followDefault: '跟随全局默认({preset})',
-      userPreset: '用户',
+      builtInPreset: '内置',
       brokenPreset: '已损坏',
       clearAll: '清除全部绑定',
       cleared: '已清除全部绑定。',
@@ -136,10 +143,10 @@ window.__ModuleLoader__.load({
     /**
      * Fold one Remote answer into {ok, value} / {ok, code, error}.
      *
-     * Since DSH 0.1.5 a generated Remote method resolves to the RemoteResult
-     * branch itself (`{ok:true, value}` / `{ok:false, error}`); only assembly
-     * faults (an unmounted method, a missing Codec) still throw. `code` is kept
-     * so callers can tell a missing endpoint from a business refusal.
+     * A generated Remote method resolves to the RemoteResult branch itself
+     * (`{ok:true, value}` / `{ok:false, error}`); only assembly faults (an
+     * unmounted method, a missing Codec) still throw. `code` is kept so callers
+     * can tell a missing endpoint from a business refusal.
      */
     async function call(operation) {
       try {
@@ -252,6 +259,22 @@ window.__ModuleLoader__.load({
       return typeof value === 'string' ? value : undefined
     }
 
+    /**
+     * Ids of the presets a deployment composes itself.
+     *
+     * The roster row carries no source field (`AgentPresetRow` is
+     * `{id, isDefault, name?, description?, broken?}`), so the shipped screen's
+     * own convention is used instead: a shipped preset publishes no display
+     * name, while a declared one names itself. Requiring the id as well keeps
+     * the label off an undeclared row that merely lacks a name.
+     */
+    const BUILT_IN_PRESETS = new Set(['standard', 'ptc', 'minimal', 'cordis'])
+
+    /** Whether one roster row is a preset the deployment composes itself. */
+    function isBuiltInPreset(preset) {
+      return preset.name === undefined && BUILT_IN_PRESETS.has(preset.id)
+    }
+
     /** Sessions whose preset the user picked explicitly, carried over from a previous page. */
     function loadUserChosen() {
       try {
@@ -321,9 +344,12 @@ window.__ModuleLoader__.load({
         metaFailures = 0
         const presets = Array.isArray(roster.value.presets) ? roster.value.presets : []
         const defaultPreset = presets.find((preset) => preset.isDefault === true)
-        const namespace = (described.value.namespaces ?? []).find(
-          (entry) => entry.ns === SETTINGS_NS || entry.ns === SETTINGS_NS_FALLBACK,
-        )
+        const views = Array.isArray(described.value.namespaces) ? described.value.namespaces : []
+        let namespace
+        for (const candidate of SETTINGS_NS_CANDIDATES) {
+          namespace = views.find((entry) => entry.ns === candidate)
+          if (namespace !== undefined) break
+        }
         if (namespace === undefined) {
           meta.set({
             ...meta.getSnapshot(),
@@ -395,9 +421,9 @@ window.__ModuleLoader__.load({
         const disposers = [
           ctx.on('connection/reset', () => { void refreshMeta() }),
           ctx.remote.$on('settings/document-updated', (ns) => {
-            // Answer either name: the resolved section on DSH >= 0.1.7 may be
-            // the entry-id fallback, and a rename must still refresh the page.
-            if (ns === SETTINGS_NS || ns === SETTINGS_NS_FALLBACK) void refreshMeta()
+            // Answer every candidate name: the section may have resolved under
+            // any of them, and a rename must still refresh the page.
+            if (SETTINGS_NS_CANDIDATES.includes(ns)) void refreshMeta()
           }),
           // Reconciliation only ever selects a workspace binding, so a commit
           // outside that set is the user's own pick. Without this record the
@@ -423,7 +449,7 @@ window.__ModuleLoader__.load({
           const [notice, setNotice] = useState(null)
           const [errorText, setErrorText] = useState(null)
 
-          // The 0.1.5 settings shell paints no section title, so every section
+          // The settings shell paints no section title, so every section
           // renders its own heading; the states below share that frame.
           const shell = (child) => createElement(PageShell, { title: t('nav') }, child)
 
@@ -478,7 +504,7 @@ window.__ModuleLoader__.load({
               ...selectable.map((preset) => createElement(
                 'option',
                 { key: preset.id, value: preset.id },
-                `${preset.name ?? preset.id}${preset.trust === 'user' ? ` · ${t('userPreset')}` : ''}`,
+                `${preset.name ?? preset.id}${isBuiltInPreset(preset) ? ` · ${t('builtInPreset')}` : ''}`,
               )),
             ]
             if (boundPresetMissing) {

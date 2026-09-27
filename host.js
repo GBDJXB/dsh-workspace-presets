@@ -6,24 +6,23 @@
  * files, writes no directories, and leaves nothing behind but an inert
  * (never-read) section after uninstall.
  *
- * Two DSH generations store that section in two different ways, and this
- * module covers both from one source:
- *
- *   • DSH ≤ 0.1.5 — settings are NAMESPACES. The settings service owns
- *     registration (`settings.register(ns, schema, …)`) and the section lives
- *     in `<dshHome>/settings.yaml` under the registered name. There is no
- *     per-entry form, so `Config` below is inert on that generation.
+ * The current DSH line (0.1.7) is the shape this module is written for:
  *
  *   • DSH ≥ 0.1.7 — settings are per-Loader-entry CONFIG. There is no
  *     `settings.register`: a plugin's exported `Config` schema IS its section,
- *     the section NAME is the Loader entry id, and only fields carrying the
- *     `volatile` meta are offered to a settings surface (an entry whose Config
- *     declares none is not configurable at all). The section lives in the
+ *     the section NAME is the Loader entry id, and the section lives in the
  *     profile's `cordis.patch.yml` as that entry's `config`.
+ *     (@deepseek-ai/dsh-settings lib/types/index.js, `SettingsForms.describe`.)
+ *
+ *   • DSH ≤ 0.1.5 — settings were NAMESPACES registered by name
+ *     (`settings.register(ns, schema, base)`), stored in
+ *     `<dshHome>/settings.yaml`. `apply` below still covers that generation
+ *     from the same source, and `Config` is simply inert there.
  *
  * `workspace-agent-presets` is the one name both generations publish, which is
- * why the row mounted by `cordis.patch.yml` must carry that exact id: a
- * settings surface — and the Web half — addresses the section by name alone.
+ * why the row mounted by `cordis.patch.yml` must carry that exact id: on the
+ * current line the Loader entry id IS the settings name, so a settings surface
+ * — and the Web half — addresses the section by that id alone.
  */
 import Schema from '@deepseek-ai/schemastery'
 
@@ -57,18 +56,26 @@ function bindingsField() {
 /**
  * Mark one node as settings-writable on DSH ≥ 0.1.7.
  *
- * This is not decoration. That generation commits a section change into the
- * running plugin through the loader's volatile fast path: a change confined to
- * schema-declared volatile fields is applied to the references the live config
- * already holds instead of re-initializing the plugin
- * (`Entry.update` → `_commitVolatile`). Those references exist only when the
- * schema wrapped the field in a cosmokit Volatile, which schemastery started
- * doing in 3.18.4 (through cosmokit's
- * `Symbol.for("cosmokit.volatile.write")` protocol, so the wrapper is
- * recognized across module copies). With an older schemastery the resolved
- * field is a plain value, the fast path finds no reference, reports success,
- * and **silently keeps the old config** — a settings page then reads its own
- * write back as unchanged until the next boot.
+ * This is not decoration, and it is not merely an optimization. Two separate
+ * mechanisms on that generation depend on it:
+ *
+ *   • The form projection. `SettingsForms.describe` builds each entry's page
+ *     from `volatileForm(schema)` — the subtree of fields whose nearest
+ *     ancestor carries the `volatile` meta. An entry whose Config declares
+ *     none is absent from `settings.describe()` entirely, and its writes are
+ *     refused with `Plugin entry "…" has no volatile fields`. Without this
+ *     wrapper there is no page to render and no write to accept.
+ *
+ *   • The live-commit fast path. `Entry.update` → `_commitVolatile` folds a
+ *     change confined to schema-declared volatile paths into the references
+ *     the running config already holds instead of re-initializing the plugin.
+ *     Those references exist only when the schema wrapped the field in a
+ *     cosmokit Volatile, which schemastery started doing in 3.18.4 (through
+ *     cosmokit's `Symbol.for("cosmokit.volatile.write")` protocol, so the
+ *     wrapper is recognized across module copies). With an older schemastery
+ *     the resolved field is a plain value, the fast path finds no reference,
+ *     reports success, and **silently keeps the old config** — a settings page
+ *     then reads its own write back as unchanged until the next boot.
  *
  * A schemastery that cannot wrap is therefore a hard failure here rather than a
  * quietly broken save.
@@ -80,8 +87,9 @@ function markVolatile(schema) {
   if (typeof schema.volatile !== 'function') {
     throw new Error(
       'dsh-workspace-presets requires @deepseek-ai/schemastery >= 3.18.4: on DSH >= 0.1.7 a settings ' +
-      'section reaches the running plugin only when its volatile field resolves to a cosmokit Volatile, ' +
-      'which older schemastery cannot produce (saves would be accepted and then dropped). ' +
+      'section is projected into a page — and a save reaches the running plugin — only when its field is ' +
+      'declared volatile, which older schemastery cannot produce (the page would be missing or the save ' +
+      'accepted and then dropped). ' +
       'Reinstall the plugin so its own node_modules carries 3.18.4 or newer.',
     )
   }
@@ -92,9 +100,10 @@ function markVolatile(schema) {
 const BindingsSchema = Schema.object({ bindings: bindingsField() })
 
 /**
- * DSH ≥ 0.1.7 section schema: the same field, marked volatile because that
- * generation persists only volatile fields into the profile patch — and hides
- * an entry whose form would otherwise be empty.
+ * DSH ≥ 0.1.7 section schema: the same field, marked volatile because on that
+ * generation only volatile fields are projected into the settings form and
+ * persisted into the profile patch — an entry whose form would otherwise be
+ * empty is not configurable at all.
  */
 export const Config = Schema.object({ bindings: markVolatile(bindingsField()) })
 

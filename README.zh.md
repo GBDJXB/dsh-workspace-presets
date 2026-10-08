@@ -4,7 +4,7 @@
 
 <div align="center">
   <a href="https://opensource.org/licenses/MIT"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-yellow.svg" /></a>
-  <img alt="支持的 DSH 版本:0.1.5 与 0.1.7" src="https://img.shields.io/badge/DSH-0.1.5%20%7C%200.1.7-4d6bfe" />
+  <img alt="支持的 DSH 版本:0.1.5、0.1.7 与 0.2.0" src="https://img.shields.io/badge/DSH-0.1.5%20%7C%200.1.7%20%7C%200.2.0-4d6bfe" />
   <img alt="工作区预设" src="https://img.shields.io/badge/-工作区预设-4d6bfe" /> <img alt="自动套用" src="https://img.shields.io/badge/-自动套用-4d6bfe" /> <img alt="中英双语" src="https://img.shields.io/badge/-中英双语-4d6bfe" />
   <!-- 发布到 npm 后可补充:npm 版本 / 下载量 / GitHub stars 徽章。 -->
 </div>
@@ -32,7 +32,7 @@
 
 **前置条件**:DSH 部署包含 Agent 预设(标准安装即有),且 PATH 里有 `pnpm`(`dsh plugin` 内部转发给 pnpm)。
 
-**支持的 DSH 版本**:`0.1.7` 线(现在 npm 的 `dsh web` 与 DSH Desktop 2.x 都在这一代,设置按 Loader 条目存),以及更早的 `0.1.5` 线(命名命名空间式设置)。这两者是**设置模型的分代**,不是平台之分:你在哪一代取决于 `dsh` 版本,而不是 web 还是 desktop。除设置小节之外,插件用到的所有 API 在两代上完全一致。
+**支持的 DSH 版本**:`0.2.0` 线(现在 npm 的 `dsh web` 与 DSH Desktop 2.x 都在这一代),`0.1.7` 线(同样按 Loader 条目存设置),以及更早的 `0.1.5` 线(命名命名空间式设置)。`0.1.7` 与 `0.2.0` 属于同一设置代:插件用到的所有 API 在两线上完全一致,因此 peer 范围同时声明两者。你在哪一代取决于 `dsh` 版本,而不是 web 还是 desktop。
 
 **从 npm 安装**(发布后):
 

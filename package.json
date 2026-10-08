@@ -1,7 +1,7 @@
 {
   "name": "dsh-workspace-presets",
-  "version": "0.2.1",
-  "description": "Per-workspace Agent preset bindings for DeepSeek Harness: bind a preset to a workspace once and every new session there boots with it. Written for the current DSH line (0.1.7 per-entry settings) and still loads on the 0.1.5-and-older named-namespace line.",
+  "version": "0.2.2",
+  "description": "Per-workspace Agent preset bindings for DeepSeek Harness: bind a preset to a workspace once and every new session there boots with it. Written for the current DSH line (0.2.0 per-entry settings; also runs on 0.1.7) and still loads on the 0.1.5-and-older named-namespace line.",
   "type": "module",
   "main": "host.js",
   "exports": {
@@ -57,11 +57,11 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "~4.0.4",
-    "@deepseek-ai/dsh-api-remotes": "0.1.7-rc.2",
-    "@deepseek-ai/dsh-client-connection": "0.1.7-rc.2",
-    "@deepseek-ai/dsh-client-locale": "0.1.7-rc.2",
-    "@deepseek-ai/dsh-client-ui-settings": "0.1.7-rc.2",
-    "@deepseek-ai/dsh-settings": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-api-remotes": "^0.1.7-rc.2 || ^0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-connection": "^0.1.7-rc.2 || ^0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-locale": "^0.1.7-rc.2 || ^0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-ui-settings": "^0.1.7-rc.2 || ^0.2.0-rc.2",
+    "@deepseek-ai/dsh-settings": "^0.1.7-rc.2 || ^0.2.0-rc.2",
     "react": "^18.2.0"
   },
   "dependencies": {

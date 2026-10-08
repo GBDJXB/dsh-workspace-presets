@@ -4,7 +4,7 @@
 
 <div align="center">
   <a href="https://opensource.org/licenses/MIT"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-yellow.svg" /></a>
-  <img alt="Supported DSH versions: 0.1.5 and 0.1.7" src="https://img.shields.io/badge/DSH-0.1.5%20%7C%200.1.7-4d6bfe" />
+  <img alt="Supported DSH versions: 0.1.5, 0.1.7 and 0.2.0" src="https://img.shields.io/badge/DSH-0.1.5%20%7C%200.1.7%20%7C%200.2.0-4d6bfe" />
   <img alt="Workspace presets" src="https://img.shields.io/badge/-Workspace%20presets-4d6bfe" /> <img alt="Auto apply" src="https://img.shields.io/badge/-Auto%20apply-4d6bfe" /> <img alt="zh%20%2F%20en" src="https://img.shields.io/badge/-zh%20%2F%20en-4d6bfe" />
   <!-- After publishing, add: npm version / npm downloads / GitHub stars badges. -->
 </div>
@@ -32,7 +32,7 @@
 
 **Prerequisites:** a DSH deployment that composes Agent presets (the standard install does), and `pnpm` on your PATH (`dsh plugin` forwards to pnpm).
 
-**Supported DSH versions:** the `0.1.7` line, which is what the npm `dsh web` and DSH Desktop 2.x both run today (settings are per-Loader-entry config), and the older `0.1.5` line (named settings namespaces). The two are *settings generations*, not platforms: which one you are on is decided by the `dsh` version, not by web-versus-desktop. Every API this plugin calls beyond the settings section is identical on both.
+**Supported DSH versions:** the `0.2.0` line, which is what the npm `dsh web` and DSH Desktop 2.x run today, the `0.1.7` line, which uses the same per-Loader-entry config settings, and the older `0.1.5` line (named settings namespaces). The `0.1.7` and `0.2.0` lines are the same settings generation — every API this plugin calls is identical on both, which is why the peer range declares both. Which settings generation you are on is decided by the `dsh` version, not by web-versus-desktop.
 
 **From npm** (once published):
 
